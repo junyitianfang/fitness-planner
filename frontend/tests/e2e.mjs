@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
-import { spawn, spawnSync } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { spawn } from "node:child_process";
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
@@ -18,7 +17,7 @@ const port = await new Promise((resolve) => {
   });
 });
 const base = `http://127.0.0.1:${port}`;
-const password = randomBytes(20).toString("hex");
+const password = "12345678";
 const env = {
   ...process.env,
   FITNESS_DATA_DIR: temporary,
@@ -27,15 +26,6 @@ const env = {
 };
 const python = process.env.FITNESS_PYTHON || "python";
 const cwd = resolve(root, "backend");
-const initialized = spawnSync(
-  python,
-  [
-    "-c",
-    "import sys; from main import init_password; init_password(sys.stdin.read())",
-  ],
-  { cwd, env, input: password, encoding: "utf8" },
-);
-assert.equal(initialized.status, 0, initialized.stderr);
 const server = spawn(
   python,
   [

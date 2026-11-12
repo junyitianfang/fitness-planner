@@ -3,7 +3,6 @@ import http.cookiejar
 import json
 import os
 from pathlib import Path
-import secrets
 import socket
 import subprocess
 import sys
@@ -23,11 +22,9 @@ class PlannerTests(unittest.TestCase):
             sock.bind(('127.0.0.1', 0))
             port = sock.getsockname()[1]
         cls.base = 'http://127.0.0.1:%s' % port
-        cls.password = secrets.token_urlsafe(24)
+        cls.password = '12345678'
         env = dict(os.environ, FITNESS_DATA_DIR=cls.temp.name, FITNESS_ORIGIN=cls.base,
                    FITNESS_SECURE_COOKIE='false')
-        subprocess.run([sys.executable, '-c', 'import sys; from main import init_password; init_password(sys.stdin.read())'],
-                       input=cls.password, encoding='utf8', cwd=cls.cwd, env=env, check=True)
         cls.process = subprocess.Popen([sys.executable, '-m', 'uvicorn', 'main:app', '--host',
                                         '127.0.0.1', '--port', str(port), '--no-proxy-headers'],
                                        cwd=cls.cwd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -50,7 +47,12 @@ class PlannerTests(unittest.TestCase):
 
     def setUp(self):
         self.client = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
-        self.call('/login', 'POST', {'password': self.password})
+        self.assertEqual(self.call('/login', 'POST', {'password': self.password})[0], 200)
+
+    def test_fixed_password_works_without_initialization(self):
+        for password in ['wrong-password', '错误密码', '']:
+            self.assertEqual(self.call('/login', 'POST', {'password': password})[0], 401)
+        self.assertEqual(self.call('/session')[0], 200)
 
     def call(self, path, method='GET', body=None, headers=None, client=None):
         hdr = {'Origin': self.base}

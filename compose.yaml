@@ -1,0 +1,35 @@
+name: fitness-planner
+services:
+  fitness:
+    build:
+      context: .
+      args:
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.13-slim}
+    image: fitness-planner:local
+    restart: unless-stopped
+    ports:
+      - "${FITNESS_BIND_ADDRESS:-0.0.0.0}:${FITNESS_PORT:-8010}:8000"
+    environment:
+      FITNESS_DATA_DIR: /data
+      FITNESS_ORIGIN: ${FITNESS_ORIGIN:?Set the exact browser origin in .env}
+      FITNESS_SECURE_COOKIE: ${FITNESS_SECURE_COOKIE:-true}
+    volumes:
+      - ${FITNESS_HOST_DATA_DIR:-./data}:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=268435456,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 768m
+    pids_limit: 128
+    healthcheck:
+      test: [CMD, python, -c, "import http.client; c=http.client.HTTPConnection('127.0.0.1',8000,timeout=3); c.request('GET','/api/session'); assert c.getresponse().status==401"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

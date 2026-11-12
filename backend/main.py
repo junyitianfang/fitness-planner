@@ -1,6 +1,4 @@
 """Personal fitness planner. Python 3.8+, existing FastAPI installation."""
-import argparse
-import getpass
 import hashlib
 import hmac
 import json
@@ -26,6 +24,7 @@ VIDEOS = DATA / 'videos'
 VIDEOS.mkdir(exist_ok=True)
 SECURE = os.environ.get('FITNESS_SECURE_COOKIE', 'false').lower() == 'true'
 LIMIT = 200 * 1024 * 1024
+ACCESS_PASSWORD = '12345678'
 
 
 @contextmanager
@@ -42,7 +41,6 @@ def db():
 
 with db() as con:
     con.executescript('''
-    CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY, expires REAL NOT NULL);
     CREATE TABLE IF NOT EXISTS templates(id TEXT PRIMARY KEY, body TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS schedule(day TEXT PRIMARY KEY, template_id TEXT NOT NULL
@@ -51,20 +49,6 @@ with db() as con:
         feeling TEXT NOT NULL, snapshot TEXT NOT NULL, created REAL NOT NULL);
     CREATE TABLE IF NOT EXISTS attempts(ip TEXT PRIMARY KEY, count INTEGER, since REAL);
     ''')
-
-
-def password_hash(password, salt):
-    return hashlib.pbkdf2_hmac('sha256', password.encode(), bytes.fromhex(salt), 260000).hex()
-
-
-def init_password(password):
-    if len(password) < 10:
-        raise ValueError('密码至少需要 10 个字符')
-    salt = secrets.token_hex(16)
-    with db() as con:
-        con.execute('INSERT OR REPLACE INTO settings VALUES (?, ?)',
-                    ('password', salt + ':' + password_hash(password, salt)))
-        con.execute('DELETE FROM sessions')
 
 
 app = FastAPI(title='随练 · 个人训练计划', docs_url=None, redoc_url=None, openapi_url=None)
@@ -118,11 +102,7 @@ def login(body: Login, request: Request, response: Response):
         attempt = con.execute('SELECT * FROM attempts WHERE ip=?', (ip,)).fetchone()
         if attempt and now - attempt['since'] < 900 and attempt['count'] >= 10:
             raise HTTPException(429, '尝试次数较多，请在 15 分钟后重试')
-        row = con.execute("SELECT value FROM settings WHERE key='password'").fetchone()
-        if not row:
-            raise HTTPException(503, '请先在服务器运行 python main.py init-password 设置访问密码')
-        salt, expected = row['value'].split(':')
-        if not hmac.compare_digest(password_hash(body.password, salt), expected):
+        if not hmac.compare_digest(body.password.encode('utf-8'), ACCESS_PASSWORD.encode('utf-8')):
             count = attempt['count'] + 1 if attempt and now - attempt['since'] < 900 else 1
             since = attempt['since'] if count > 1 else now
             con.execute('INSERT OR REPLACE INTO attempts VALUES (?,?,?)', (ip, count, since))
@@ -365,11 +345,5 @@ if DIST.exists():
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('command', choices=['init-password'])
-    parser.parse_args()
-    first = getpass.getpass('设置个人访问密码（至少10位）: ')
-    if first != getpass.getpass('再次输入: '):
-        raise SystemExit('两次密码不一致')
-    init_password(first)
-    print('访问密码已设置，旧会话已失效。')
+    import uvicorn
+    uvicorn.run(app, host='127.0.0.1', port=8010)

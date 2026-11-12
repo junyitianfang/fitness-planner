@@ -1,5 +1,5 @@
-# Current environment already provides these modules. Do not install for local development.
-# Resolve and lock deployment versions when preparing the server environment.
+# Install using the Python executable from your selected Conda environment.
+# Existing compatible packages are reused; no upgrade is requested.
 fastapi
 uvicorn
 python-multipart
