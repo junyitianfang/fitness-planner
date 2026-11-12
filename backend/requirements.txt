@@ -1,0 +1,6 @@
+# Current environment already provides these modules. Do not install for local development.
+# Resolve and lock deployment versions when preparing the server environment.
+fastapi
+uvicorn
+python-multipart
+pydantic
